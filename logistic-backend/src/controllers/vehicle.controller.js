@@ -1,10 +1,22 @@
 const pool = require("../config/db");
+const { successResponse, errorResponse } = require("../utils/response");
 
 const createVehicle = async (req, res) => {
   try {
     const { capacity } = req.body;
-    if (!capacity) {
-      return res.status(400).json({ error: "capacity is required" });
+    // capacity empty
+    if (capacity === undefined) {
+      return errorResponse(res, 400, "capacity is required");
+    }
+
+    // capacity abc
+    if (typeof capacity !== "number") {
+      return errorResponse(res, 400, "capacity must be a number");
+    }
+
+    // capacity negative
+    if (capacity <= 0) {
+      return errorResponse(res, 400, "capacity must be greater than 0");
     }
 
     const query = `
@@ -14,15 +26,19 @@ const createVehicle = async (req, res) => {
         `;
 
     const result = await pool.query(query, [capacity]);
-    return res.status(201).json({
-      message: "vehicle created succesfully",
-      vehicle: result.rows[0],
-    });
+    return successResponse(
+      res,
+      201,
+      "Vehicle Created Successfully",
+      result.rows[0],
+    );
   } catch (error) {
     console.error("Create Vehicle Error", error);
-    return res
-      .status(500)
-      .json({ error: "Internal Server Error Create Vehicle" });
+    return errorResponse(
+      res,
+      500,
+      "Internal Server Error : CreateVehicleController",
+    );
   }
 };
 
@@ -71,5 +87,5 @@ const updateVehicleStatus = async (req, res) => {
 module.exports = {
   createVehicle,
   getAllVehicles,
-  updateVehicleStatus
+  updateVehicleStatus,
 };
