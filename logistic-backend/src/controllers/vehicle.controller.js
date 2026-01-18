@@ -46,15 +46,17 @@ const getAllVehicles = async (req, res) => {
   try {
     const query = "SELECT * FROM vehicles ORDER BY created_at DESC";
     const result = await pool.query(query);
-    return res.status(200).json({
+    return successResponse(res, 200, "Vehicles fetched successfully", {
       count: result.rows.length,
       vehicles: result.rows,
     });
   } catch (error) {
     console.error("Get Vehicles error: ", error);
-    return res
-      .status(500)
-      .json({ error: "Internal Server Error Get Vehicles" });
+    return errorResponse(
+      res,
+      500,
+      "Failed to fetch vehicles : GETVehicles error",
+    );
   }
 };
 
@@ -63,25 +65,39 @@ const updateVehicleStatus = async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
     const allowedStatuses = ["AVAILABLE", "BUSY", "OFFLINE"];
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({ error: "Invalid statua" });
+    if (!id) {
+      return errorResponse(res, 400, "vehicle id is required");
+    }
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+    if (!uuidRegex.test(id)) {
+      return errorResponse(res, 400, "invalid vehicle id format");
+    }
+
+    if (!status || !allowedStatuses.includes(status)) {
+      return errorResponse(
+        res,
+        400,
+        "status must be AVAILABLE, BUSY, or OFFLINE",
+      );
     }
 
     const query = `UPDATE vehicles SET status = $1 WHERE id = $2 RETURNING *`;
     const result = await pool.query(query, [status, id]);
 
     if (result.rows.length === 0) {
-      return res.status(400).json({ error: "Vehicle Not Found" });
+      return errorResponse(res, 404, "Vehicle Not Found");
     }
-    return res.status(200).json({
-      message: "Vehicle Status Updated",
-      vehicle: result.rows[0],
-    });
+    return successResponse(
+      res,
+      200,
+      "Vehicle status updated successfully",
+      result.rows[0],
+    );
   } catch (error) {
     console.error("Update Vehicle Error: ", error);
-    return res
-      .status(500)
-      .json({ error: "Internal Server Error Update Vehicle Status" });
+    return errorResponse(res, 500, "Failed to update vehicle status");
   }
 };
 module.exports = {
