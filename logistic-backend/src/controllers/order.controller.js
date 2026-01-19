@@ -74,6 +74,32 @@ const createOrder = async (req, res) => {
   }
 };
 
+const getOrders = async (req, res) => {
+  try {
+    const query = `
+            SELECT id,
+            pickup_lat,
+            pickup_lng,
+            drop_lat,
+            drop_lng,
+            priority,
+            status,
+            created_at
+            FROM orders
+        ORDER BY created_at DESC`;
+
+    const result = await pool.query(query);
+
+    return successResponse(res, 200, "Orders Fetched Successfully", {
+      count: result.rows.length,
+      orders: result.rows,
+    });
+  } catch (error) {
+    console.error("Get Orders Error: ", error);
+    return errorResponse(res, 200, "Internal Server Error GetOrdersError");
+  }
+};
 module.exports = {
   createOrder,
+  getOrders,
 };
