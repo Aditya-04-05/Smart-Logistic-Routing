@@ -99,7 +99,63 @@ const getOrders = async (req, res) => {
     return errorResponse(res, 200, "Internal Server Error GetOrdersError");
   }
 };
+
+const updateOrderStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!id) {
+      return errorResponse(res, 400, "Order Id is requires");
+    }
+
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+    if (!uuidRegex.test(id)) {
+      return errorResponse(res, 400, "invalid order id format");
+    }
+
+    const allowedStatus = [
+      "CREATED",
+      "ASSIGNED",
+      "IN_PROGRESS",
+      "DELIVERED",
+      "CANCELLED",
+    ];
+    if (!status || !allowedStatus.includes(status)) {
+      return errorResponse(
+        res,
+        400,
+        "status must be CREATED, ASSIGNED, IN_PROGRESS, DELIVERED, or CANCELLED",
+      );
+    }
+
+    const query = `UPDATE orders SET status =$1 WHERE id = $2 RETURNING *`;
+
+    const result = await pool.query(query, [status, id]);
+
+    if (result.rows.length === 0) {
+      return errorResponse(res, 404, "Order not found");
+    }
+
+    return successResponse(
+      res,
+      200,
+      "Order status updated successfully",
+      result.rows[0],
+    );
+  } catch (error) {
+    console.error("Update Order Status Error: ", error);
+    return errorResponse(
+      res,
+      500,
+      "Internal Server Error: Update order status",
+    );
+  }
+};
 module.exports = {
   createOrder,
   getOrders,
+  updateOrderStatus,
 };
