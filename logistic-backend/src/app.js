@@ -9,7 +9,7 @@ const app = express();
 
 app.use(express.json());
 app.use("/api/vehicles", vehicleRoutes);
-app.use("api/drivers", driverRutes);
+// app.use("api/drivers", driverRutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/assignments", assignmentRoutes);
 app.get("/", (req, res) => {

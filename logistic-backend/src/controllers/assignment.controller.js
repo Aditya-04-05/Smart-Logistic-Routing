@@ -73,6 +73,13 @@ const assignOrderToVehicle = async (req, res) => {
     await client.query("UPDATE vehicles SET status = 'BUSY' WHERE id = $1", [
       vehicle_id,
     ]);
+    await client.query(
+      `
+  INSERT INTO order_status_history (order_id, old_status, new_status, note)
+  VALUES ($1, $2, $3, $4)
+  `,
+      [order_id, "CREATED", "ASSIGNED", "auto on assignment"],
+    );
 
     // 🔐 COMMIT TRANSACTION
     await client.query("COMMIT");
@@ -157,6 +164,15 @@ const unassignOrder = async (req, res) => {
       "UPDATE vehicles SET status = 'AVAILABLE' WHERE id = $1",
       [vehicle_id],
     );
+
+    await client.query(
+      `
+  INSERT INTO order_status_history (order_id, old_status, new_status, note)
+  VALUES ($1, $2, $3, $4)
+  `,
+      [order_id, "ASSIGNED", "CREATED", "auto on unassign"],
+    );
+
     await client.query("COMMIT");
 
     return successResponse(res, 200, "Order unassigned successfully", {
