@@ -7,5 +7,5 @@ router.get("/", orderController.getOrders);
 router.patch("/:id/status", orderController.updateOrderStatus);
 router.patch("/:id/start", orderController.startDelivery);
 router.patch("/:id/complete", orderController.completeDelivery);
-
+router.patch("/:id/cancel", orderController.cancelOrder);
 module.exports = router;

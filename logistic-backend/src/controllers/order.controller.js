@@ -268,6 +268,92 @@ const completeDelivery = async (req, res) => {
     client.release();
   }
 };
+const cancelOrder = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+    if (!uuidRegex.test(id)) {
+      return errorResponse(res, 400, "Invalid order id");
+    }
+
+    await client.query("BEGIN");
+
+    // 1️⃣ Fetch order
+    const orderRes = await client.query(
+      "SELECT status FROM orders WHERE id = $1",
+      [id],
+    );
+
+    if (orderRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return errorResponse(res, 404, "Order not found");
+    }
+
+    const currentStatus = orderRes.rows[0].status;
+
+    if (currentStatus === "IN_PROGRESS" || currentStatus === "DELIVERED") {
+      await client.query("ROLLBACK");
+      return errorResponse(res, 400, "Order cannot be cancelled at this stage");
+    }
+
+    // 2️⃣ If ASSIGNED → unassign
+    if (currentStatus === "ASSIGNED") {
+      const assignmentRes = await client.query(
+        `
+        SELECT vehicle_id
+        FROM order_vehicle_assignments
+        WHERE order_id = $1
+        `,
+        [id],
+      );
+
+      if (assignmentRes.rows.length > 0) {
+        const vehicleId = assignmentRes.rows[0].vehicle_id;
+
+        await client.query(
+          "DELETE FROM order_vehicle_assignments WHERE order_id = $1",
+          [id],
+        );
+
+        await client.query(
+          "UPDATE vehicles SET status = 'AVAILABLE' WHERE id = $1",
+          [vehicleId],
+        );
+      }
+    }
+
+    // 3️⃣ Update order status
+    await client.query("UPDATE orders SET status = 'CANCELLED' WHERE id = $1", [
+      id,
+    ]);
+
+    // 4️⃣ Insert history
+    await client.query(
+      `
+      INSERT INTO order_status_history (order_id, old_status, new_status, note)
+      VALUES ($1, $2, $3, $4)
+      `,
+      [id, currentStatus, "CANCELLED", "order cancelled"],
+    );
+
+    await client.query("COMMIT");
+
+    return successResponse(res, 200, "Order cancelled successfully", {
+      order_id: id,
+      status: "CANCELLED",
+    });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Cancel Order Error:", error);
+    return errorResponse(res, 500, "Failed to cancel order");
+  } finally {
+    client.release();
+  }
+};
 
 module.exports = {
   createOrder,
@@ -275,4 +361,5 @@ module.exports = {
   updateOrderStatus,
   startDelivery,
   completeDelivery,
+  cancelOrder,
 };
