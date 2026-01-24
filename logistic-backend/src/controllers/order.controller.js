@@ -154,8 +154,125 @@ const updateOrderStatus = async (req, res) => {
     );
   }
 };
+
+const startDelivery = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      return errorResponse(res, 400, "Invalid order id");
+    }
+
+    await client.query("BEGIN");
+
+    const orderRes = await client.query(
+      "SELECT status FROM orders WHERE id = $1",
+      [id],
+    );
+
+    if (orderRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return errorResponse(res, 404, "Order not found");
+    }
+
+    if (orderRes.rows[0].status !== "ASSIGNED") {
+      await client.query("ROLLBACK");
+      return errorResponse(res, 400, "Only ASSIGNED orders can be started");
+    }
+
+    await client.query(
+      "UPDATE orders SET status = 'IN_PROGRESS' WHERE id = $1",
+      [id],
+    );
+
+    await client.query(
+      `
+      INSERT INTO order_status_history (order_id, old_status, new_status, note)
+      VALUES ($1, $2, $3, $4)
+      `,
+      [id, "ASSIGNED", "IN_PROGRESS", "delivery started"],
+    );
+
+    await client.query("COMMIT");
+
+    return successResponse(res, 200, "Delivery started", {
+      order_id: id,
+      status: "IN_PROGRESS",
+    });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Start Delivery Error:", error);
+    return errorResponse(res, 500, "Failed to start delivery");
+  } finally {
+    client.release();
+  }
+};
+const completeDelivery = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      return errorResponse(res, 400, "Invalid order id");
+    }
+
+    await client.query("BEGIN");
+
+    const orderRes = await client.query(
+      "SELECT status FROM orders WHERE id = $1",
+      [id],
+    );
+
+    if (orderRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return errorResponse(res, 404, "Order not found");
+    }
+
+    if (orderRes.rows[0].status !== "IN_PROGRESS") {
+      await client.query("ROLLBACK");
+      return errorResponse(
+        res,
+        400,
+        "Only IN_PROGRESS orders can be completed",
+      );
+    }
+
+    await client.query("UPDATE orders SET status = 'DELIVERED' WHERE id = $1", [
+      id,
+    ]);
+
+    await client.query(
+      `
+      INSERT INTO order_status_history (order_id, old_status, new_status, note)
+      VALUES ($1, $2, $3, $4)
+      `,
+      [id, "IN_PROGRESS", "DELIVERED", "delivery completed"],
+    );
+
+    await client.query("COMMIT");
+
+    return successResponse(res, 200, "Delivery completed", {
+      order_id: id,
+      status: "DELIVERED",
+    });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Complete Delivery Error:", error);
+    return errorResponse(res, 500, "Failed to complete delivery");
+  } finally {
+    client.release();
+  }
+};
+
 module.exports = {
   createOrder,
   getOrders,
   updateOrderStatus,
+  startDelivery,
+  completeDelivery,
 };
