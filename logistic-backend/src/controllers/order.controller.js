@@ -210,6 +210,7 @@ const startDelivery = async (req, res) => {
     client.release();
   }
 };
+
 const completeDelivery = async (req, res) => {
   const client = await pool.connect();
   try {
@@ -223,16 +224,15 @@ const completeDelivery = async (req, res) => {
 
     await client.query("BEGIN");
 
+    // 1️⃣ Check order status
     const orderRes = await client.query(
       "SELECT status FROM orders WHERE id = $1",
       [id],
     );
-
     if (orderRes.rows.length === 0) {
       await client.query("ROLLBACK");
       return errorResponse(res, 404, "Order not found");
     }
-
     if (orderRes.rows[0].status !== "IN_PROGRESS") {
       await client.query("ROLLBACK");
       return errorResponse(
@@ -242,10 +242,22 @@ const completeDelivery = async (req, res) => {
       );
     }
 
+    // 2️⃣ Find assignment (if any)
+    const assignRes = await client.query(
+      `
+      SELECT vehicle_id
+      FROM order_vehicle_assignments
+      WHERE order_id = $1
+      `,
+      [id],
+    );
+
+    // 3️⃣ Update order status
     await client.query("UPDATE orders SET status = 'DELIVERED' WHERE id = $1", [
       id,
     ]);
 
+    // 4️⃣ Insert history
     await client.query(
       `
       INSERT INTO order_status_history (order_id, old_status, new_status, note)
@@ -253,6 +265,21 @@ const completeDelivery = async (req, res) => {
       `,
       [id, "IN_PROGRESS", "DELIVERED", "delivery completed"],
     );
+
+    // 5️⃣ If assigned → free vehicle + remove assignment
+    if (assignRes.rows.length > 0) {
+      const vehicleId = assignRes.rows[0].vehicle_id;
+
+      await client.query(
+        "UPDATE vehicles SET status = 'AVAILABLE' WHERE id = $1",
+        [vehicleId],
+      );
+
+      await client.query(
+        "DELETE FROM order_vehicle_assignments WHERE order_id = $1",
+        [id],
+      );
+    }
 
     await client.query("COMMIT");
 
@@ -268,6 +295,7 @@ const completeDelivery = async (req, res) => {
     client.release();
   }
 };
+
 const cancelOrder = async (req, res) => {
   const client = await pool.connect();
   try {
@@ -355,6 +383,48 @@ const cancelOrder = async (req, res) => {
   }
 };
 
+const getHistory = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+    if (!uuidRegex.test(id)) {
+      return errorResponse(res, 400, "Invalid order id");
+    }
+
+    // Optional: ensure order exists
+    const orderCheck = await pool.query("SELECT id FROM orders WHERE id = $1", [
+      id,
+    ]);
+    if (orderCheck.rows.length === 0) {
+      return errorResponse(res, 404, "Order not found");
+    }
+
+    const historyRes = await pool.query(
+      `
+      SELECT
+        old_status,
+        new_status,
+        note,
+        changed_at
+      FROM order_status_history
+      WHERE order_id = $1
+      ORDER BY changed_at ASC
+      `,
+      [id],
+    );
+
+    return successResponse(res, 200, "Order history fetched", {
+      order_id: id,
+      events: historyRes.rows,
+    });
+  } catch (error) {
+    console.error("Get Order History Error:", error);
+    return errorResponse(res, 500, "Failed to fetch order history");
+  }
+};
 module.exports = {
   createOrder,
   getOrders,
@@ -362,4 +432,5 @@ module.exports = {
   startDelivery,
   completeDelivery,
   cancelOrder,
+  getHistory,
 };
