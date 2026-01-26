@@ -1,22 +1,22 @@
 import { Routes, Route, Link } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import Orders from "./pages/Orders";
+import Vehicles from "./pages/Vehicles";
 
 const App = () => {
   return (
-    <div style={{ padding: "20px" }}>
+    <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
       <h1>Logistics Dashboard</h1>
 
-      <nav style={{ marginBottom: "20px" }}>
-        <Link to="/" style={{ marginRight: "15px" }}>
-          Dashboard
-        </Link>
+      <div className="nav">
+        <Link to="/">Dashboard</Link>
         <Link to="/orders">Orders</Link>
-      </nav>
-
+        <Link to="/vehicles">Vehicles</Link>
+      </div>
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/orders" element={<Orders />} />
+        <Route path="/vehicles" element={<Vehicles />} />
       </Routes>
     </div>
   );

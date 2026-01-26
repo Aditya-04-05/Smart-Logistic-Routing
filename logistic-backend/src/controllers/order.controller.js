@@ -405,10 +405,7 @@ const getHistory = async (req, res) => {
     const historyRes = await pool.query(
       `
       SELECT
-        old_status,
-        new_status,
-        note,
-        changed_at
+        *
       FROM order_status_history
       WHERE order_id = $1
       ORDER BY changed_at ASC
@@ -425,7 +422,6 @@ const getHistory = async (req, res) => {
     return errorResponse(res, 500, "Failed to fetch order history");
   }
 };
-
 
 module.exports = {
   createOrder,

@@ -4,6 +4,7 @@ import api from "../api/api";
 
 const Dashboard = () => {
   const navigate = useNavigate();
+
   const [vehicles, setVehicles] = useState([]);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -18,7 +19,7 @@ const Dashboard = () => {
       setVehicles(vehiclesRes.data.data.vehicles);
       setOrders(ordersRes.data.data.orders || ordersRes.data.data);
     } catch (err) {
-      console.error("Failed to fetch dashboard data", err);
+      console.error("Dashboard fetch failed", err);
     }
   };
 
@@ -26,9 +27,9 @@ const Dashboard = () => {
     try {
       setLoading(true);
       await api.post("/assignments/run");
-      await fetchData(); // refresh counts
+      await fetchData();
     } catch (err) {
-      console.error("Assignment run failed", err);
+      console.error("Assignment failed", err);
     } finally {
       setLoading(false);
     }
@@ -38,38 +39,33 @@ const Dashboard = () => {
     fetchData();
   }, []);
 
-  const totalVehicles = vehicles.length;
   const availableVehicles = vehicles.filter(
     (v) => v.status === "AVAILABLE",
   ).length;
   const busyVehicles = vehicles.filter((v) => v.status === "BUSY").length;
 
-  const totalOrders = orders.length;
   const createdOrders = orders.filter((o) => o.status === "CREATED").length;
   const assignedOrders = orders.filter((o) => o.status === "ASSIGNED").length;
 
   return (
-    <div style={{ padding: "20px" }}>
+    <div>
       <h2>Dashboard</h2>
-
-      <div>
+      <div className="sectiom">
         <h3>Vehicles</h3>
-        <p>Total: {totalVehicles}</p>
+        <p>Total: {vehicles.length}</p>
         <p>Available: {availableVehicles}</p>
         <p>Busy: {busyVehicles}</p>
       </div>
-
-      <div>
+      <div className="sectio">
         <h3>Orders</h3>
-        <p>Total: {totalOrders}</p>
+        <p>Total: {orders.length}</p>
         <p>Created: {createdOrders}</p>
         <p>Assigned: {assignedOrders}</p>
       </div>
-
-      <button onClick={runAssignment} disabled={loading}>
-        {loading ? "Running..." : "Run Assignment Engine"}
+      <button onClick={runAssignment}>Run Assignment Engine</button>
+      <button className="secondary" onClick={() => navigate("/orders")}>
+        See Orders
       </button>
-      <button onClick={() => navigate("/orders")}>See Orders</button>
     </div>
   );
 };
