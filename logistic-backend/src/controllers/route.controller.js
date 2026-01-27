@@ -22,20 +22,20 @@ const getVehicleRoute = async (req, res) => {
   try {
     const { vehicleId } = req.params;
 
-    // 1️⃣ Fetch assigned orders for vehicle
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+    if (!uuidRegex.test(vehicleId)) {
+      return errorResponse(res, 400, "Invalid vehicle id");
+    }
+
     const result = await pool.query(
       `
-      SELECT
-        o.id,
-        o.pickup_lat,
-        o.pickup_lng,
-        o.drop_lat,
-        o.drop_lng
+      SELECT o.*
       FROM orders o
-      JOIN order_vehicle_assignments ova
-        ON o.id = ova.order_id
+      JOIN order_vehicle_assignments ova ON o.id = ova.order_id
       WHERE ova.vehicle_id = $1
-        AND o.status = 'ASSIGNED'
+      ORDER BY ova.assigned_at ASC
       `,
       [vehicleId],
     );
@@ -47,10 +47,12 @@ const getVehicleRoute = async (req, res) => {
       });
     }
 
-    // 2️⃣ Greedy nearest-next routing (DROP ONLY)
     const unvisited = [...result.rows];
 
-    // Start point = pickup of first order (implicit hub)
+    if (!unvisited[0].pickup_lat || !unvisited[0].pickup_lng) {
+      return errorResponse(res, 500, "Invalid pickup coordinates");
+    }
+
     let currentLat = unvisited[0].pickup_lat;
     let currentLng = unvisited[0].pickup_lng;
 
@@ -91,7 +93,7 @@ const getVehicleRoute = async (req, res) => {
       stops: route,
     });
   } catch (error) {
-    console.error("Route generation error:", error);
+    console.error("Route generation error:", error.message);
     return errorResponse(res, 500, "Failed to generate route");
   }
 };
